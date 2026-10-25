@@ -14,7 +14,7 @@ class Base(DeclarativeBase):
 class Tenant(Base):
     __tablename__ = "Tenant"
 
-    id: Mapped[int] = mapped_column(sa.Integer(), primary_key=True)
+    id: Mapped[int] = mapped_column(sa.Integer(), primary_key=True, autoincrement=False)
     name: Mapped[str] = mapped_column(sa.Text())
     users: Mapped[list[TenantUser]] = relationship(back_populates="tenant", foreign_keys="[TenantUser.tenant_id]")
 

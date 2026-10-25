@@ -50,5 +50,5 @@ class Item(Base):
     photo: Mapped[Optional[bytes]] = mapped_column(sa.BLOB())
     born_on: Mapped[Optional[datetime.date]] = mapped_column("bornOn", sa.Date())
     opens_at: Mapped[Optional[datetime.time]] = mapped_column("opensAt", mysql.TIME(fsp=0))
-    seen_at: Mapped[datetime.datetime] = mapped_column("seenAt", mysql.TIMESTAMP(fsp=3), server_default=sa.func.now())
-    created_at: Mapped[datetime.datetime] = mapped_column("createdAt", mysql.DATETIME(fsp=3), server_default=sa.func.now())
+    seen_at: Mapped[datetime.datetime] = mapped_column("seenAt", mysql.TIMESTAMP(fsp=3), server_default=sa.text("CURRENT_TIMESTAMP(3)"))
+    created_at: Mapped[datetime.datetime] = mapped_column("createdAt", mysql.DATETIME(fsp=3), server_default=sa.text("CURRENT_TIMESTAMP(3)"))

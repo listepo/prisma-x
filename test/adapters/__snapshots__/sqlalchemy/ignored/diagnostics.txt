@@ -1,0 +1,2 @@
+info[IGNORED_MODEL] AuditLog: @@ignore: emitted as the table audit_log_table without a mapped class
+info[IGNORED_MODEL] Tag: @@ignore: emitted as the table tag_table without a mapped class

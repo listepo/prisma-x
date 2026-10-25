@@ -156,6 +156,28 @@ model Other {
     expect(codes(output.diagnostics)).toEqual(['warning:UNSUPPORTED_TYPE', 'error:NO_PRIMARY_KEY']);
   });
 
+  it('keeps @@ignore tables in schema.rs without structs, and skips keyless ones with a warning', () => {
+    const output = run(dieselAdapter, fixture('ignored').source);
+    const schema = file(output, 'schema.rs');
+    const models = file(output, 'models.rs');
+    expect(schema).toContain('    tag (id) {');
+    expect(schema).toContain('diesel::joinable!(tag_to_user -> tag (a));');
+    expect(schema).not.toContain('audit_log');
+    expect(models).not.toMatch(/pub struct (Tag|TagToUser|AuditLog)\b/);
+    expect(codes(output.diagnostics)).toEqual(['warning:IGNORED_MODEL_SKIPPED', 'info:IGNORED_MODEL', 'warning:JOINABLE_SKIPPED']);
+  });
+
+  it('keeps @ignore columns in table! but out of the structs', () => {
+    const output = run(dieselAdapter, fixture('ignored').source);
+    expect(file(output, 'schema.rs')).toContain('        #[sql_name = "legacy_code"]\n        legacy -> Nullable<Text>,');
+    const models = file(output, 'models.rs');
+    expect(models).toContain('/// Leaves out `@ignore` columns (`legacy`); select with `User::as_select()`.');
+    expect(models).not.toContain('pub legacy');
+    // Diesel has no relation fields, so an @ignore relation field changes nothing; foreign-key names are not used.
+    expect(models).toContain('#[diesel(belongs_to(Post, foreign_key = pinned_id))]');
+    expect(models).not.toContain('fk');
+  });
+
   it('emits New<Model> insert structs that leave database defaults out', () => {
     const models = file(run(dieselAdapter, fixture('blog').source), 'models.rs');
     expect(models).toMatch(/pub struct New\w+ \{/);

@@ -8,12 +8,12 @@
   - `prismax generate` CLI
   - reference tests ported from `psl/psl/tests/validation`
   - Python script tests
-- `pnpm typecheck`, `pnpm build` and `pnpm test` are green. The Python script tests pass with `python3 -m unittest discover -s scripts/tests`; `pnpm test:py` runs the same tests and needs pytest.
+  - real-SQLAlchemy check of the generated models (`scripts/check_sqlalchemy_models.py`, `pnpm check:sqlalchemy`)
+  - recovery of what the engine's datamodel omits (`@relation(map:)`, `@@ignore`, `@ignore`) from the schema text
+- `pnpm typecheck`, `pnpm build` and `pnpm test` are green. The Python script tests pass with `python3 -m unittest discover -s scripts/tests`; `pnpm test:py` runs the same tests and needs pytest. The SQLAlchemy check (SQLAlchemy 2) and the Diesel compile check pass for every fixture.
 - Public API: `parseSchema`, `validate`, `getDmmf`, `generate`, `buildIr` and the IR/adapter types. Adapters are exposed as `prisma-x/adapters/{diesel,sqlalchemy}`. Wasm stays internal (`src/internal/wasm.ts`).
 - Docs: `docs/{parser,core-ir,adapters,diesel,sqlalchemy,cli,reference-tests}.md`.
-- Open items:
-  - CI workflows (owner adds them)
-  - run SQLAlchemy `configure_mappers()` on the generated models (not run locally: no SQLAlchemy installed)
+- Open items: none from this plan. CI is configured in `.github/infra.yml` (called from `.github/workflows/pipeline.yml`).
 
 ## 2. Goal
 Convert a Prisma schema into ORM code for other ecosystems. The core is target-agnostic; output targets are pluggable adapters (adapter pattern, not "providers").
@@ -39,6 +39,7 @@ schema.prisma -> parser (wasm wrapper) -> AST/DMMF -> core -> neutral model IR -
 
 ## 6. Known limitations
 - `get_dmmf` panics on model names starting with a non-ASCII character (engine bug; surfaced as `ENGINE_PANIC`).
-- `Unsupported(...)` fields are dropped by the engine; they are recovered by a source scan (`src/source-scan.ts`).
-- The engine's datamodel does not expose custom foreign-key names (`@relation(map:)`), so generated code uses Prisma's default names.
+- The engine's datamodel drops `Unsupported(...)` fields, `@ignore` fields, `@@ignore` models and custom foreign-key names (`@relation(map:)`). They are recovered from the schema text (`src/source-scan.ts`, `src/source-recovery.ts`), and tests check the recovery against the engine on Prisma's validation suite.
+- `@@ignore`/`@ignore` parts stay where the output describes the database and are left out where it mirrors Prisma Client. Diesel skips an ignored model without a key (`table!` needs one), with a warning. Diesel does not use foreign-key names.
+- `relationMode = "prisma"` and index details beyond fields and names (sort order, length, type) are not carried by the IR.
 - Diesel allows one `joinable!` per table pair and one `belongs_to` per parent type; extra relations are reported as diagnostics.

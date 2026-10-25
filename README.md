@@ -38,14 +38,15 @@ schema.prisma -> parser (wasm wrapper) -> AST -> core: buildIr -> neutral IR -> 
 src/index.ts             public API: parser functions, SchemaError, AST/DMMF types, core
 src/parser.ts            pipeline: input check -> lint -> validate -> extract -> Result
 src/ast.ts               AST types + datamodel -> AST mapping (relations derived here)
-src/source-scan.ts       recovers Unsupported(...) fields the engine omits
+src/source-scan.ts       tolerant scanner for model/view blocks of the schema text
+src/source-recovery.ts   rebuilds what the engine omits: @@ignore models, @ignore and Unsupported fields, FK names
 src/internal/wasm.ts     the only module that touches the wasm package
 src/core/                neutral IR (ir.ts), AST -> IR (build.ts), Adapter contract (adapter.ts), names
 src/adapters/diesel/     Diesel 2 adapter      (entry point prisma-x/adapters/diesel)
 src/adapters/sqlalchemy/ SQLAlchemy 2.0 adapter (entry point prisma-x/adapters/sqlalchemy)
 src/generate.ts          parse -> IR -> adapter in one call
 src/cli.ts               the prismax command
-scripts/                 Prisma reference test fetcher, Diesel compile check (Python, stdlib only)
+scripts/                 Prisma reference test fetcher, Diesel compile check, SQLAlchemy check (Python)
 ```
 
 - The core resolves Prisma's semantics: database names, default constraint names, effective
@@ -84,19 +85,22 @@ pnpm typecheck       # tsc --noEmit (strict)
 pnpm test            # vitest: parser, AST, core, adapters (file snapshots), CLI, reference cases
 pnpm test:py         # pytest for scripts/ (no network)
 pnpm compile-check   # optional: cargo check the generated Diesel code (skips without cargo)
+pnpm check:sqlalchemy  # optional: import, configure and create the generated SQLAlchemy models
+                       # (skips without SQLAlchemy 2)
 ```
 
 ## Roadmap
 
 - [x] Typed wrapper over the wasm engine: `parseSchema`, `validate`, `getDmmf`, `SchemaError`
 - [x] Typed AST with indexes, `@map`, documentation and recovered `Unsupported(...)` fields
+- [x] Custom foreign-key names (`@relation(map: ...)`), `@@ignore` models and `@ignore` fields,
+      recovered from the schema text
 - [x] Neutral core IR and `Adapter` interface
 - [x] Diesel adapter (PostgreSQL, MySQL, SQLite), compile-checked with `cargo check`
-- [x] SQLAlchemy 2.0 adapter
+- [x] SQLAlchemy 2.0 adapter, checked with real SQLAlchemy (`configure_mappers`, `create_all`)
 - [x] `prismax generate` CLI
 - [x] Behavioral tests ported from Prisma's validation suite
 - [ ] Multi-file schemas
-- [ ] Custom foreign-key names (needs more than the engine's datamodel output)
 - [ ] Composite types (MongoDB), views
 - [ ] Run as a Prisma generator (`generator x { provider = "prismax" }`)
 - [ ] Browser build (wasm-bindgen `web` target)
@@ -106,10 +110,13 @@ pnpm compile-check   # optional: cargo check the generated Diesel code (skips wi
 - Private and not published to npm.
 - Node.js only, synchronous. The wasm package is the wasm-bindgen `nodejs` target.
 - Single-file schemas only. Diagnostics always report `fileName: "schema.prisma"`.
-- Generated code covers the data model, not migrations. Custom foreign-key names,
-  `relationMode = "prisma"`, `@@ignore`d models and index details beyond fields and names are not
-  visible to adapters. See each adapter's doc for target-specific limitations (for example,
-  Diesel's one `joinable!` per table pair, and SQLite `DateTime` storage).
+- Generated code covers the data model, not migrations. `relationMode = "prisma"` and index
+  details beyond fields and names are not visible to adapters. See each adapter's doc for
+  target-specific limitations (for example, Diesel's one `joinable!` per table pair, and SQLite
+  `DateTime` storage).
+- `@@ignore` models and `@ignore` fields are kept where the output describes the database and
+  left out where it mirrors Prisma Client. A Diesel `table!` needs a primary key, so an ignored
+  model without one is skipped there, with a warning.
 - `getDmmf` returns the full DMMF, which is large (about 35 MB of JSON for 500 models).
   `parseSchema` uses the much smaller datamodel-only call.
 - Engine bug in the pinned build: `getDmmf` panics on a model name whose *first* character is

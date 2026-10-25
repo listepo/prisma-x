@@ -30,6 +30,8 @@ adapters do not have to re-implement them:
 | two list relation fields | `IrManyToManyRelation` with a resolved `joinTable` |
 | `enum`, `@map` on values, `@@map` | `IrEnum.dbName`, `values[].dbName` |
 | `Unsupported("circle")` | `IrUnsupportedField.type = 'circle'` |
+| `@relation(map: "fk")` | `IrForeignKeyRelation.dbName = 'fk'` |
+| `@@ignore`, `@ignore` | `IrModel.isIgnored`, `field.isIgnored`, and `isIgnored` on the relations they touch |
 
 Attributes are represented structurally (as the properties above), not as raw attribute lists.
 
@@ -48,6 +50,11 @@ What `buildIr` resolves:
   `SetNull` for optional relations and `Restrict` for required ones; `onUpdate` is `Cascade`).
   `referencesPrimaryKey` tells whether `references` is exactly the target's primary key.
   Scalar foreign-key fields get `isForeignKey: true`.
+- **Ignored parts.** `@@ignore` models and `@ignore` fields are not in Prisma Client, but their
+  tables, columns and foreign keys exist in the database (Prisma Migrate creates them). The IR
+  keeps them and flags them with `isIgnored`. A relation is `isIgnored` when either relation
+  field has `@ignore` or either model has `@@ignore`. Each adapter decides how much of an
+  ignored part it emits.
 - **Implicit many-to-many.** Prisma's join table conventions: table `_<RelationName>`; columns
   `A` and `B`, where `A` belongs to the model whose name sorts first (for self-relations, the
   field whose name sorts first); `(A, B)` is a primary key `_<t>_AB_pkey` on PostgreSQL and a
@@ -103,18 +110,17 @@ pnpm vitest run test/core
 - `test/core/ir.test.ts`: names, enums, field kinds and declaration order, defaults and
   `generatedBy`, keys and default constraint names (including truncation), referential action
   defaults, many-to-many ordering and join table names per provider, self-relations,
-  `findRelation`, and IR built from hand-made ASTs.
+  `findRelation`, recovered foreign-key names and ignored parts, and IR built from hand-made ASTs.
 - `test/core/names.test.ts`: word splitting and case conversion.
 - `test/public-api.test.ts`: core modules never import from `src/adapters`.
 
 ## Limitations
 
-- The IR holds what the AST holds, which is what the engine's datamodel holds:
-  - Custom foreign-key names (`@relation(map: ...)`) are not exposed by the engine. Foreign keys
-    always get Prisma's default names.
-  - Models with `@@ignore` are absent.
-  - Index details such as sort order, length, index type (`type: Hash`) and `clustered` are not
-    carried; only the field names and the constraint name are.
+- The IR holds what the AST holds: the engine's datamodel, plus custom foreign-key names,
+  `@@ignore` models and `@ignore`/`Unsupported` fields recovered from the source (see
+  [parser.md](parser.md#how-it-works)). Index details such as sort order, length, index type
+  (`type: Hash`) and `clustered` are not carried; only the field names and the constraint name
+  are.
 - `relationMode = "prisma"` is ignored: the IR always describes database foreign keys.
 - Composite types (MongoDB) and multi-file schemas are not supported.
 - Views are not supported, because the parser does not enable the `views` preview feature.

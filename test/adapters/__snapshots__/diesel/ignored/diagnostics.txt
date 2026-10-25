@@ -1,0 +1,3 @@
+warning[IGNORED_MODEL_SKIPPED] AuditLog: @@ignore model without a usable @id or @unique; table! needs a primary key, so it is skipped
+info[IGNORED_MODEL] Tag: @@ignore: the table is in schema.rs, but models.rs has no struct for it
+warning[JOINABLE_SKIPPED] User: Relation "Pinned": user and post already have a joinable!; Diesel allows only one per table pair

@@ -136,6 +136,7 @@ describe('buildIr', () => {
       isList: false,
       isRequired: false,
       documentation: null,
+      isIgnored: false,
     });
   });
 
@@ -160,6 +161,7 @@ describe('buildIr', () => {
       isList: true,
       isRequired: true,
       documentation: null,
+      isIgnored: false,
     });
   });
 
@@ -218,6 +220,7 @@ describe('buildIr', () => {
       onDelete: 'Cascade',
       onUpdate: 'Cascade',
       dbName: 'Post_authorId_fkey',
+      isIgnored: false,
     });
   });
 
@@ -265,6 +268,7 @@ model B {
         indexDbName: '_PostToTag_B_index',
         foreignKeyDbNames: ['_PostToTag_A_fkey', '_PostToTag_B_fkey'],
       },
+      isIgnored: false,
     });
   });
 
@@ -337,6 +341,42 @@ model C {
     expect(findRelation(schema, 'A', 'id')).toBeUndefined();
   });
 
+  it('recovers @relation(map: ...), @@ignore models and @ignore fields the engine leaves out', () => {
+    const schema = ir(`${ds('postgresql')}
+model User {
+  id     Int    @id
+  secret String @ignore
+  posts  Post[]
+  logs   Log[]  @ignore
+}
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id], map: "fk_post_author")
+}
+model Log {
+  id     Int  @id
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  @@ignore
+}
+`);
+    expect(schema.models.map((m) => [m.name, m.isIgnored])).toEqual([
+      ['User', false],
+      ['Post', false],
+      ['Log', true],
+    ]);
+    expect(schema.models[0]!.fields.map((f) => [f.name, f.isIgnored])).toEqual([
+      ['id', false],
+      ['secret', true],
+      ['posts', false],
+      ['logs', true],
+    ]);
+    expect(fkRelation(schema, 'PostToUser')).toMatchObject({ dbName: 'fk_post_author', isIgnored: false });
+    expect(fkRelation(schema, 'LogToUser')).toMatchObject({ dbName: 'Log_userId_fkey', isIgnored: true, from: { model: 'Log' } });
+  });
+
   it('is plain JSON data', () => {
     expect(JSON.parse(JSON.stringify(blog))).toEqual(blog);
   });
@@ -355,6 +395,7 @@ model C {
           primaryKey: null,
           uniqueIndexes: [],
           indexes: [],
+          isIgnored: false,
           fields: [
             {
               kind: 'scalar',
@@ -370,6 +411,7 @@ model C {
               isUpdatedAt: false,
               default: null,
               documentation: null,
+              isIgnored: false,
             },
           ],
         },

@@ -63,6 +63,8 @@ interface Column {
   readonly field: IrColumnField | null;
   readonly isAutoincrement: boolean;
   readonly hasDatabaseDefault: boolean;
+  /** `@ignore`: in `table!`, not in the structs. */
+  readonly isIgnored: boolean;
 }
 
 interface BelongsTo {
@@ -82,6 +84,8 @@ interface Table {
   /** Custom SQL types (enum structs in `sql_types`) used by the table. */
   readonly customTypes: Set<string>;
   readonly isJoinTable: boolean;
+  /** No structs: the model has `@@ignore`, or the join table relates one. */
+  readonly isIgnored: boolean;
 }
 
 interface EnumPlan {
@@ -215,6 +219,7 @@ class DieselGenerator {
       belongsTo: [],
       customTypes: new Set(),
       isJoinTable: false,
+      isIgnored: model.isIgnored,
     };
     // A column may not share its table's name, nor the items `table!` generates.
     const columnIdents = new Set([ident, ...TABLE_MODULE_ITEMS]);
@@ -238,11 +243,15 @@ class DieselGenerator {
         field,
         isAutoincrement: field.default?.kind === 'function' && field.default.name === 'autoincrement',
         hasDatabaseDefault: field.default?.generatedBy === 'database',
+        isIgnored: field.isIgnored,
       });
     }
 
     const key = this.primaryKeyOf(model, table);
     if (key === null) return;
+    if (model.isIgnored) {
+      this.diagnostics.info('IGNORED_MODEL', '@@ignore: the table is in schema.rs, but models.rs has no struct for it', { model: model.name });
+    }
     table.primaryKey.push(...key);
     if (table.columns.length > 32) {
       const feature = table.columns.length > 64 ? '128-column-tables' : '64-column-tables';
@@ -279,9 +288,15 @@ class DieselGenerator {
         return key;
       }
     }
-    this.diagnostics.error('NO_PRIMARY_KEY', 'No usable @id or @unique for a Diesel primary key; the model is skipped', {
-      model: model.name,
-    });
+    if (model.isIgnored) {
+      this.diagnostics.warning('IGNORED_MODEL_SKIPPED', '@@ignore model without a usable @id or @unique; table! needs a primary key, so it is skipped', {
+        model: model.name,
+      });
+    } else {
+      this.diagnostics.error('NO_PRIMARY_KEY', 'No usable @id or @unique for a Diesel primary key; the model is skipped', {
+        model: model.name,
+      });
+    }
     return null;
   }
 
@@ -304,8 +319,12 @@ class DieselGenerator {
     this.joinables.push({ child: child.ident, parent: parent.ident, foreignKey });
   }
 
-  /** Adds `belongs_to` unless the child already belongs to that parent type (impls would conflict). */
+  /**
+   * Adds `belongs_to` unless the child already belongs to that parent type (impls would conflict).
+   * Needs both structs, so not when a side is ignored.
+   */
   private addBelongsTo(child: Table, parent: Table, foreignKey: string, relation: string, model: string): void {
+    if (child.isIgnored || parent.isIgnored) return;
     if (child.belongsTo.some((b) => b.parent === parent.structName)) {
       this.diagnostics.warning(
         'BELONGS_TO_SKIPPED',
@@ -364,12 +383,14 @@ class DieselGenerator {
         field: null,
         isAutoincrement: false,
         hasDatabaseDefault: false,
+        isIgnored: false,
       })),
       primaryKey: ['a', 'b'],
       belongsTo: [],
       // An enum primary key makes the join column use the enum's SQL type.
       customTypes: new Set([a, b].map((s) => s.key.sqlType).filter((t) => a.parent.customTypes.has(t) || b.parent.customTypes.has(t))),
       isJoinTable: true,
+      isIgnored: a.parent.isIgnored || b.parent.isIgnored,
     };
     this.tables.set(`\u0000${relation.name}`, table);
     for (const side of [a, b]) {
@@ -443,6 +464,7 @@ class DieselGenerator {
     ];
     for (const e of this.enums.values()) out.push(...this.renderEnum(e), '');
     for (const table of tables) {
+      if (table.isIgnored) continue;
       out.push(...this.renderStruct(table), '');
       if (!table.isJoinTable) out.push(...this.renderInsertStruct(table));
     }
@@ -451,8 +473,10 @@ class DieselGenerator {
 
   private renderStruct(table: Table): string[] {
     const derives = ['Queryable', 'Selectable', 'Identifiable', ...(table.belongsTo.length > 0 ? ['Associations'] : []), 'Insertable'];
+    const ignored = table.columns.filter((c) => c.isIgnored).map((c) => `\`${c.ident}\``);
+    const note = ignored.length === 0 ? [] : [`Leaves out \`@ignore\` columns (${ignored.join(', ')}); select with \`${table.structName}::as_select()\`.`];
     const out = [
-      ...docComments(table.documentation, ''),
+      ...docComments([table.documentation, ...note].filter((d) => d !== null).join('\n\n') || null, ''),
       `#[derive(${derives.join(', ')}, Debug, Clone, PartialEq)]`,
       `#[diesel(table_name = super::schema::${table.ident})]`,
     ];
@@ -462,6 +486,7 @@ class DieselGenerator {
     for (const b of table.belongsTo) out.push(`#[diesel(belongs_to(${b.parent}, foreign_key = ${b.foreignKey}))]`);
     out.push(`#[diesel(check_for_backend(${BACKEND[this.backend].type}))]`, `pub struct ${table.structName} {`);
     for (const column of table.columns) {
+      if (column.isIgnored) continue;
       out.push(...docComments(column.field?.documentation ?? null, '    '), `    pub ${column.ident}: ${column.rustType},`);
     }
     out.push('}');
@@ -474,8 +499,8 @@ class DieselGenerator {
    * (`None` inserts `DEFAULT`). Only emitted when such columns exist.
    */
   private renderInsertStruct(table: Table): string[] {
-    if (!table.columns.some((c) => c.hasDatabaseDefault)) return [];
-    const columns = table.columns.filter((c) => !c.isAutoincrement);
+    if (!table.columns.some((c) => c.hasDatabaseDefault && !c.isIgnored)) return [];
+    const columns = table.columns.filter((c) => !c.isAutoincrement && !c.isIgnored);
     if (columns.length === 0) return [];
     const name = claim(`New${table.structName}`, this.typeNames);
     const out = [

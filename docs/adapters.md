@@ -38,6 +38,11 @@ The contract (`src/core/adapter.ts`):
 - Output is deterministic: the same IR always gives byte-identical files.
 - Adapters own all target knowledge: type mapping, identifier rules, reserved words, naming
   conventions. The core has none. A test enforces that core modules never import adapters.
+- Ignored parts (`isIgnored` on models, fields and relations) exist in the database but not in
+  Prisma Client. Adapters keep them in whatever describes the database (a table definition,
+  constraints) and leave them out of whatever mirrors the client (mapped classes, structs,
+  relation helpers). What they emit or skip is reported with a diagnostic. See
+  [sqlalchemy.md](sqlalchemy.md#how-it-works) and [diesel.md](diesel.md#how-it-works).
 
 `src/adapters/shared.ts` holds small helpers that several adapters use: unique identifier
 claiming, documentation lines and the `@generated` header.
@@ -69,7 +74,9 @@ pnpm vitest run test/adapters -u          # accept changed snapshots after revie
 ```
 
 Snapshots live in `test/adapters/__snapshots__/<adapter>/<fixture>/`. Each holds the generated
-files and a `diagnostics.txt`.
+files and a `diagnostics.txt`. Two scripts check generated code with the real target toolchain:
+`pnpm compile-check` (Diesel, `cargo check`) and `pnpm check:sqlalchemy` (imports, mapper
+configuration and DDL with SQLAlchemy).
 
 ## Limitations
 

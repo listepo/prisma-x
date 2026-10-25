@@ -19,8 +19,8 @@ class Base(DeclarativeBase):
 course_to_student_table = sa.Table(
     "_CourseToStudent",
     Base.metadata,
-    sa.Column("A", sa.ForeignKey("Course.id", ondelete="CASCADE", onupdate="CASCADE", name="_CourseToStudent_A_fkey")),
-    sa.Column("B", sa.ForeignKey("Student.id", ondelete="CASCADE", onupdate="CASCADE", name="_CourseToStudent_B_fkey")),
+    sa.Column("A", sa.ForeignKey("Course.id", ondelete="CASCADE", onupdate="CASCADE", name="_CourseToStudent_A_fkey"), nullable=False),
+    sa.Column("B", sa.ForeignKey("Student.id", ondelete="CASCADE", onupdate="CASCADE", name="_CourseToStudent_B_fkey"), nullable=False),
     sa.UniqueConstraint("A", "B", name="_CourseToStudent_AB_unique"),
     sa.Index("_CourseToStudent_B_index", "B"),
 )
@@ -29,8 +29,8 @@ course_to_student_table = sa.Table(
 club_members_table = sa.Table(
     "_ClubMembers",
     Base.metadata,
-    sa.Column("A", sa.ForeignKey("Club.code", ondelete="CASCADE", onupdate="CASCADE", name="_ClubMembers_A_fkey")),
-    sa.Column("B", sa.ForeignKey("Student.id", ondelete="CASCADE", onupdate="CASCADE", name="_ClubMembers_B_fkey")),
+    sa.Column("A", sa.ForeignKey("Club.code", ondelete="CASCADE", onupdate="CASCADE", name="_ClubMembers_A_fkey"), nullable=False),
+    sa.Column("B", sa.ForeignKey("Student.id", ondelete="CASCADE", onupdate="CASCADE", name="_ClubMembers_B_fkey"), nullable=False),
     sa.UniqueConstraint("A", "B", name="_ClubMembers_AB_unique"),
     sa.Index("_ClubMembers_B_index", "B"),
 )
@@ -73,6 +73,6 @@ class Enrollment(Base):
     student_id: Mapped[int] = mapped_column(sa.Integer(), sa.ForeignKey("Student.id", ondelete="RESTRICT", onupdate="CASCADE", name="enrollments_student_id_fkey"), primary_key=True)
     course_id: Mapped[int] = mapped_column(sa.Integer(), sa.ForeignKey("Course.id", ondelete="RESTRICT", onupdate="CASCADE", name="enrollments_course_id_fkey"), primary_key=True)
     grade: Mapped[Optional[decimal.Decimal]] = mapped_column(sa.Numeric(4, 1))
-    enrolled_at: Mapped[datetime.datetime] = mapped_column(mysql.DATETIME(fsp=3), server_default=sa.func.now())
+    enrolled_at: Mapped[datetime.datetime] = mapped_column(mysql.DATETIME(fsp=3), server_default=sa.text("CURRENT_TIMESTAMP(3)"))
     student: Mapped[Student] = relationship(back_populates="enrollments", foreign_keys="[Enrollment.student_id]")
     course: Mapped[Course] = relationship(back_populates="enrollments", foreign_keys="[Enrollment.course_id]")

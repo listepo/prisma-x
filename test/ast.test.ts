@@ -127,6 +127,7 @@ describe('parseSchema AST', () => {
       isUpdatedAt: false,
       default: null,
       documentation: null,
+      isIgnored: false,
     });
   });
 
@@ -217,7 +218,8 @@ model Thing {
         { model: 'Post', field: 'author', isList: false, isRequired: true },
         { model: 'User', field: 'posts', isList: true, isRequired: true },
       ],
-      foreignKey: { fields: ['authorId'], references: ['id'], onDelete: null, onUpdate: 'Restrict' },
+      foreignKey: { fields: ['authorId'], references: ['id'], onDelete: null, onUpdate: 'Restrict', dbName: null },
+      isIgnored: false,
     });
   });
 

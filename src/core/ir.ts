@@ -52,6 +52,8 @@ export interface IrModel {
   readonly uniques: readonly IrIndex[];
   /** `@@index` and `@@fulltext`. */
   readonly indexes: readonly IrIndex[];
+  /** `@@ignore`: not part of Prisma Client, but the table exists in the database. */
+  readonly isIgnored: boolean;
 }
 
 export interface IrPrimaryKey {
@@ -98,6 +100,8 @@ interface IrFieldBase {
   readonly isList: boolean;
   readonly isRequired: boolean;
   readonly documentation: string | null;
+  /** `@ignore`: not part of Prisma Client, but the column (or foreign key) exists in the database. */
+  readonly isIgnored: boolean;
 }
 
 interface IrColumnFieldBase extends IrFieldBase {
@@ -168,8 +172,13 @@ export interface IrForeignKeyRelation {
   readonly onDelete: ReferentialAction;
   /** Effective action: explicit, or Prisma's default (Cascade). */
   readonly onUpdate: ReferentialAction;
-  /** Foreign-key constraint name (Prisma's default `<table>_<columns>_fkey`). */
+  /** Foreign-key constraint name: `@relation(map: ...)` or Prisma's default `<table>_<columns>_fkey`. */
   readonly dbName: string;
+  /**
+   * A relation field has `@ignore` or a side's model has `@@ignore`: Prisma
+   * Client has no relation, but the foreign key exists in the database.
+   */
+  readonly isIgnored: boolean;
 }
 
 export interface IrJoinColumn {
@@ -208,6 +217,8 @@ export interface IrManyToManyRelation {
   readonly a: IrRelationEnd;
   readonly b: IrRelationEnd;
   readonly joinTable: IrJoinTable;
+  /** A relation field has `@ignore` or a side's model has `@@ignore`; the join table still exists. */
+  readonly isIgnored: boolean;
 }
 
 export type IrRelation = IrForeignKeyRelation | IrManyToManyRelation;

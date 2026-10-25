@@ -75,6 +75,7 @@ function toField(field: Field): IrField {
     isList: field.isList,
     isRequired: field.isRequired,
     documentation: field.documentation,
+    isIgnored: field.isIgnored,
   };
   const column = {
     ...base,
@@ -171,6 +172,7 @@ function buildModel(model: Model, limit: number): IrModel {
     primaryKey,
     uniques,
     indexes,
+    isIgnored: model.isIgnored,
   };
 }
 
@@ -205,7 +207,8 @@ function buildForeignKeyRelation(relation: Relation, models: ReadonlyMap<string,
     referencesPrimaryKey: target.primaryKey !== null && sameFields(target.primaryKey.fields, fk.references),
     onDelete: referentialAction(fk.onDelete, from.isRequired ? 'Restrict' : 'SetNull'),
     onUpdate: referentialAction(fk.onUpdate, 'Cascade'),
-    dbName: constraintName(`${owner.dbName}_${columns.join('_')}`, '_fkey', limit),
+    dbName: fk.dbName ?? constraintName(`${owner.dbName}_${columns.join('_')}`, '_fkey', limit),
+    isIgnored: relation.isIgnored,
   };
 }
 
@@ -255,6 +258,7 @@ function buildManyToManyRelation(
         `${tableBytes >= maxTable ? truncateBytes(table, maxTable) : table}_B_fkey`,
       ],
     },
+    isIgnored: relation.isIgnored,
   };
 }
 

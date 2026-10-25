@@ -31,7 +31,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:py": "python3 -m pytest scripts/tests -q",
-    "compile-check": "pnpm build && python3 scripts/compile_check_diesel.py"
+    "compile-check": "pnpm build && python3 scripts/compile_check_diesel.py",
+    "check:sqlalchemy": "pnpm build && python3 scripts/check_sqlalchemy_models.py"
   },
   "dependencies": {
     "@prisma/prisma-schema-wasm": "8.1.0-2.59be4fda12412a79eeb9c2ae727b6aa723593323"

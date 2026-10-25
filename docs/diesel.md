@@ -48,6 +48,20 @@ pub mod models;
 with columns `a` and `b` (`sql_name` `A`/`B`), primary key `(a, b)`, `joinable!` to both sides,
 and a struct that `belongs_to` both models.
 
+**Ignored parts.** Prisma Client leaves out `@@ignore` models and `@ignore` fields, but they exist
+in the database. `schema.rs` describes the database, so it keeps them. `models.rs` mirrors the
+client, so it leaves them out:
+
+| Prisma | `schema.rs` | `models.rs` |
+| --- | --- | --- |
+| `@@ignore` model with a key | `table!`, `joinable!` | No struct; no `belongs_to` to it; no struct for a join table that relates it (`IGNORED_MODEL` info) |
+| `@@ignore` model without `@id`/`@unique` | Skipped: `table!` needs a primary key (`IGNORED_MODEL_SKIPPED` warning) | Nothing |
+| `@ignore` scalar field | Column | Left out of the struct and `New<Model>`; the struct doc says to select with `<Struct>::as_select()` |
+| `@ignore` relation field | Unchanged | Unchanged: Diesel has no relation fields, and `belongs_to` stays while both structs exist |
+
+Foreign-key constraint names (`@relation(map: ...)`) are not used: Diesel does not model
+constraints.
+
 **Identifiers.** Rust keywords get a `_` suffix (`type` becomes `type_`). A column may not share
 its table's name or the items that `table!` generates (`table`, `columns`, `star`, `all_columns`,
 `dsl`), so such columns get a `_` suffix too (`orders.order` becomes `order_`). Name collisions
@@ -95,6 +109,8 @@ See `src/adapters/diesel/types.ts` for the full table.
 | `JOIN_TABLE_SKIPPED` | warning | A many-to-many side refers to a skipped model |
 | `TOO_MANY_COLUMNS` | warning | More than 32 columns: enable Diesel's `64-column-tables`/`128-column-tables` feature |
 | `PRIMARY_KEY_FROM_UNIQUE` | info | No `@id`; a unique constraint is used as the Diesel primary key |
+| `IGNORED_MODEL` | info | `@@ignore` model: `table!` only, no struct |
+| `IGNORED_MODEL_SKIPPED` | warning | `@@ignore` model without a usable key; no `table!` |
 | `SQLITE_DATETIME` | info | See limitations |
 | `COCKROACHDB_AS_POSTGRES` | info | CockroachDB is generated with the PostgreSQL backend |
 
@@ -130,7 +146,7 @@ pnpm compile-check                                # optional: cargo check the ge
   it with `test/adapters/__snapshots__/diesel/<fixture>/{schema.rs,models.rs,diagnostics.txt}`.
   It also checks composite ids, self-relations, many-to-many, enums per backend, type mapping per
   backend, `@map`/`@@map` and identifier escaping, unsupported types reported as diagnostics,
-  skipped models, provider handling and determinism.
+  skipped models, ignored models and columns, provider handling and determinism.
 - `scripts/compile_check_diesel.py` (`pnpm compile-check`) builds the CLI. It then generates
   every fixture into a temporary Cargo project per backend, with Diesel and the needed features,
   and runs `cargo check`.
@@ -161,5 +177,7 @@ pnpm compile-check                                # optional: cargo check the ge
   (`uuid()`, `cuid()`, ...) must be filled in by your code.
 - Indexes and unique constraints are not represented (Diesel does not model them); use
   migrations for DDL.
-- Custom foreign-key names and `relationMode = "prisma"` are not visible (see
-  [core-ir.md](core-ir.md#limitations)).
+- A struct without its `@ignore` columns does not match `table.load::<Struct>()`, which selects
+  every column. Select with `Struct::as_select()`. Inserting it leaves the ignored columns to
+  their database default.
+- `relationMode = "prisma"` is not visible (see [core-ir.md](core-ir.md#limitations)).

@@ -123,6 +123,82 @@ model Item {
     expect(output.diagnostics).toEqual([expect.objectContaining({ code: 'DEFAULT_SKIPPED', model: 'Item', field: 'code' })]);
   });
 
+  it('keeps integer ids without @default(autoincrement()) from becoming SERIAL', () => {
+    const models = file(
+      run(sqlalchemyAdapter, `${ds('postgresql')}model A {\n  id Int @id\n}\nmodel B {\n  id BigInt @id @default(autoincrement())\n}\n`),
+      'models.py',
+    );
+    expect(models).toContain('id: Mapped[int] = mapped_column(sa.Integer(), primary_key=True, autoincrement=False)');
+    expect(models).toContain('id: Mapped[int] = mapped_column(sa.BigInteger(), primary_key=True, autoincrement=True)');
+  });
+
+  it('makes join table columns NOT NULL when they are not a primary key', () => {
+    const models = file(run(sqlalchemyAdapter, fixture('many_to_many').source), 'models.py');
+    expect(models).toContain('name="_CourseToStudent_A_fkey"), nullable=False),');
+    expect(models).toContain('name="_CourseToStudent_B_fkey"), nullable=False),');
+  });
+
+  it('renders now() on MySQL as CURRENT_TIMESTAMP with the column precision', () => {
+    const models = file(
+      run(
+        sqlalchemyAdapter,
+        `${ds('mysql')}model T {\n  id Int @id\n  a DateTime @default(now())\n  b DateTime @default(now()) @db.Timestamp(6)\n  c DateTime @default(now()) @db.DateTime(0)\n}\n`,
+      ),
+      'models.py',
+    );
+    expect(models).toContain('a: Mapped[datetime.datetime] = mapped_column(mysql.DATETIME(fsp=3), server_default=sa.text("CURRENT_TIMESTAMP(3)"))');
+    expect(models).toContain('b: Mapped[datetime.datetime] = mapped_column(mysql.TIMESTAMP(fsp=6), server_default=sa.text("CURRENT_TIMESTAMP(6)"))');
+    expect(models).toContain('c: Mapped[datetime.datetime] = mapped_column(mysql.DATETIME(fsp=0), server_default=sa.text("CURRENT_TIMESTAMP(0)"))');
+    expect(file(run(sqlalchemyAdapter, fixture('sqlite_app').source), 'models.py')).toContain('server_default=sa.func.now()');
+  });
+
+  it('emits @@ignore models as tables without a mapped class', () => {
+    const output = run(sqlalchemyAdapter, fixture('ignored').source);
+    const models = file(output, 'models.py');
+    expect(models).toContain(
+      [
+        '# Raw audit rows without a key.',
+        'audit_log_table = sa.Table(',
+        '    "audit_log",',
+        '    Base.metadata,',
+        '    sa.Column("user_id", sa.Integer(), sa.ForeignKey("User.id", ondelete="RESTRICT", onupdate="CASCADE", name="audit_log_user_fk"), nullable=False),',
+      ].join('\n'),
+    );
+    expect(models).toContain('    sa.Column("id", sa.Integer(), primary_key=True, autoincrement=False),\n    sa.Column("name", sa.Text(), nullable=False),');
+    expect(models).not.toMatch(/class (AuditLog|Tag)\b/);
+    // The join table of an ignored relation still exists in the database.
+    expect(models).toContain('tag_to_user_table = sa.Table(');
+    expect(codes(output.diagnostics)).toEqual(['info:IGNORED_MODEL', 'info:IGNORED_MODEL']);
+  });
+
+  it('keeps @ignore columns in the table but out of the mapping', () => {
+    const models = file(run(sqlalchemyAdapter, fixture('ignored').source), 'models.py');
+    expect(models).toContain('        # Kept in the database, hidden from Prisma Client.\n        sa.Column("legacy_code", sa.Text()),');
+    expect(models).toContain('    __mapper_args__ = {"exclude_properties": ["legacy_code"]}');
+    expect(models).not.toMatch(/legacy\w*: Mapped/);
+    const keyless = file(
+      run(sqlalchemyAdapter, `${ds('sqlite')}model A {\n  code String @unique\n  note String @ignore\n}\n`),
+      'models.py',
+    );
+    expect(keyless).toContain('sa.Column("note", sa.Text(), nullable=False),');
+    expect(keyless).toContain('__mapper_args__ = {"exclude_properties": ["note"], "primary_key": [code]}');
+  });
+
+  it('drops relationship() for @ignore relation fields but keeps their foreign keys', () => {
+    const models = file(run(sqlalchemyAdapter, fixture('ignored').source), 'models.py');
+    expect(models).not.toMatch(/\b(pinned|logs|tags): Mapped/);
+    expect(models).toContain('sa.ForeignKey("Post.id", ondelete="SET NULL", onupdate="CASCADE", name="user_pinned_post_fk", use_alter=True)');
+    // The other side is in Prisma Client, so it stays, without back_populates.
+    expect(models).toContain('pinned_by: Mapped[Optional[User]] = relationship(foreign_keys="[User.pinned_id]")');
+  });
+
+  it('uses @relation(map: ...) names and use_alter only for foreign keys in a cycle', () => {
+    const models = file(run(sqlalchemyAdapter, fixture('ignored').source), 'models.py');
+    expect(models).toContain('sa.ForeignKey("User.id", ondelete="CASCADE", onupdate="CASCADE", name="post_author_fk", use_alter=True)');
+    const acyclic = file(run(sqlalchemyAdapter, fixture('blog').source), 'models.py');
+    expect(acyclic).not.toContain('use_alter');
+  });
+
   it('falls back to JSON for scalar lists outside PostgreSQL', () => {
     const source = `${ds('postgresql')}model T {\n  id Int @id\n  tags String[]\n}\n`;
     expect(file(run(sqlalchemyAdapter, source), 'models.py')).toContain('postgresql.ARRAY(sa.Text())');
@@ -134,7 +210,7 @@ model Item {
   it('generates generic types without a provider and rejects MongoDB', () => {
     const generic = run(sqlalchemyAdapter, 'model A {\n  id Int @id\n}\n');
     expect(codes(generic.diagnostics)).toEqual(['info:GENERIC_DIALECT']);
-    expect(file(generic, 'models.py')).toContain('id: Mapped[int] = mapped_column(sa.Integer(), primary_key=True)');
+    expect(file(generic, 'models.py')).toContain('id: Mapped[int] = mapped_column(sa.Integer(), primary_key=True, autoincrement=False)');
     const mongo = run(sqlalchemyAdapter, `${ds('mongodb')}model A {\n  id String @id @map("_id")\n}\n`);
     expect(mongo).toEqual({ files: [], diagnostics: [expect.objectContaining({ severity: 'error', code: 'UNSUPPORTED_PROVIDER' })] });
   });
