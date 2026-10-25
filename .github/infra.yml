@@ -2,6 +2,8 @@
 # prismax is a TypeScript package: Rust and .NET checks are off; TypeScript, the Python script
 # tests, the SQLAlchemy import check and the Diesel compile check run as custom jobs.
 version: 1
+# Custom jobs run on pyrlyn/ci's default runner for custom jobs, the self-hosted Mac
+# `xcode-27-local` (no Actions minutes). Set `runs-on: ubuntu-latest` on a job to use hosted Linux.
 
 rust:
   enabled: false
@@ -31,8 +33,11 @@ jobs:
   - name: diesel-compile-check
     mise: "node pnpm python rust"
     setup: |
-      sudo apt-get update
-      sudo apt-get install -y libpq-dev libmysqlclient-dev libsqlite3-dev
+      # Linux runners need the client libraries; the default pyrlyn runner (xcode-27-local) has them.
+      if command -v apt-get >/dev/null; then
+        sudo apt-get update
+        sudo apt-get install -y libpq-dev libmysqlclient-dev libsqlite3-dev
+      fi
       pnpm install --frozen-lockfile
       pnpm build
     run: python scripts/compile_check_diesel.py

@@ -12,7 +12,8 @@ What runs is configured in `.github/infra.yml`:
   on public repositories, and the `gate` job that aggregates everything.
 - Turned off: `rust` (prismax is not a Rust crate; generated Rust is checked below) and `dotnet`.
   No macOS or Swift jobs exist for this repository.
-- Custom jobs (pyrlyn/ci runs them as one matrix job, tools come from `mise.toml`):
+- Custom jobs (pyrlyn/ci runs them as one matrix job on its default custom-job runner, the
+  self-hosted Mac `xcode-27-local`; tools come from `mise.toml`):
   - `typescript`: `pnpm typecheck`, `pnpm build`, `pnpm test`, `npm pack --dry-run`.
   - `python-scripts`: the real SQLAlchemy import check and the pytest suite for `scripts/`.
   - `diesel-compile-check`: `cargo check` of the generated Diesel code (Postgres, MySQL, SQLite).
@@ -67,5 +68,6 @@ add GitHub Actions with repository `pyrlyn/prismax` and workflow `publish.yml`, 
   CLI command is still `prismax`.
 - No `license` field yet: the repository has no LICENSE file. Choose one before the first
   release, otherwise npm shows the package as unlicensed.
-- Actions billing problems in the organization block both CI and publishing.
+- Custom CI jobs wait when the self-hosted Mac runner is busy or offline. Actions billing
+  problems block the GitHub-hosted jobs (lint, CodeQL, Semgrep, gate) and publishing.
 - npm provenance requires a public repository and GitHub-hosted runners.
