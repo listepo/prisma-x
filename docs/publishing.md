@@ -27,6 +27,7 @@ Disable CI entirely: disable the `pipeline` workflow in the repository's Actions
 - Trigger: a GitHub release is published, or manual `workflow_dispatch` with an existing tag.
 - The tag must equal `v<version>` from `package.json`, otherwise the job fails.
 - It runs typecheck, tests and build, then `npm publish --provenance --access public`.
+- Third-party actions are pinned to full commit SHAs (pyrlyn lint policy).
 - Provenance comes from GitHub OIDC (`id-token: write`), so the npm page links the package to
   the exact commit and workflow run in `pyrlyn/prismax`.
 - Authentication uses the repository secret `NPM_TOKEN` (an npm automation or granular token
@@ -51,6 +52,14 @@ pyrlyn/ci's `release.yml` targets binary releases, so npm publishing is a local 
   `README.md` and `package.json`). CI runs it on every pull request.
 - A dry run of the whole workflow is not possible without publishing; check `npm pack` output and
   the version/tag rule instead.
+
+### Moving to trusted publishing
+
+npm trusted publishing (OIDC, no long-lived token) can only be set up for a package that already
+exists. After the first release: on npmjs.com open `prisma-x` -> Settings -> Trusted publisher,
+add GitHub Actions with repository `pyrlyn/prismax` and workflow `publish.yml`, then remove the
+`NODE_AUTH_TOKEN` env from the publish step, the ignore in `.github/jactionlint.yaml` and the
+`NPM_TOKEN` secret.
 
 ## Limitations
 
