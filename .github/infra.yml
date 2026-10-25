@@ -1,0 +1,38 @@
+# Configuration for pyrlyn/ci's ci.yml (called from pipeline.yml). See pyrlyn/ci docs/config.md.
+# prismax is a TypeScript package: Rust and .NET checks are off; TypeScript, the Python script
+# tests, the SQLAlchemy import check and the Diesel compile check run as custom jobs.
+version: 1
+
+rust:
+  enabled: false
+dotnet:
+  enabled: false
+codeql:
+  languages: [actions, javascript-typescript, python]
+
+jobs:
+  - name: typescript
+    mise: "node pnpm"
+    setup: pnpm install --frozen-lockfile
+    run: |
+      pnpm typecheck
+      pnpm build
+      pnpm test
+      npm pack --dry-run
+  - name: python-scripts
+    mise: "node pnpm python"
+    setup: |
+      python -m pip install "sqlalchemy>=2.0,<3" pytest
+      pnpm install --frozen-lockfile
+      pnpm build
+    run: |
+      python scripts/check_sqlalchemy_models.py
+      python -m pytest scripts/tests -q
+  - name: diesel-compile-check
+    mise: "node pnpm python rust"
+    setup: |
+      sudo apt-get update
+      sudo apt-get install -y libpq-dev libmysqlclient-dev libsqlite3-dev
+      pnpm install --frozen-lockfile
+      pnpm build
+    run: python scripts/compile_check_diesel.py

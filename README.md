@@ -1,5 +1,8 @@
 # prisma-x
 
+[![pipeline](https://github.com/pyrlyn/prismax/actions/workflows/pipeline.yml/badge.svg)](https://github.com/pyrlyn/prismax/actions/workflows/pipeline.yml)
+[![npm](https://img.shields.io/npm/v/prisma-x)](https://www.npmjs.com/package/prisma-x)
+
 Generates ORM code for other ecosystems from [Prisma](https://www.prisma.io/) schemas:
 [Diesel](https://diesel.rs) (Rust) and [SQLAlchemy 2.0](https://www.sqlalchemy.org/) (Python).
 Schemas are parsed by the official Rust engine compiled to WebAssembly
@@ -69,6 +72,15 @@ Docs:
 
 ## Install
 
+From npm (once published; see [docs/publishing.md](docs/publishing.md)):
+
+```sh
+npm install prisma-x        # library
+npx -p prisma-x prismax --help   # CLI
+```
+
+From source:
+
 Requires Node.js 20+ and pnpm. Python 3.9+ is used for the optional scripts, and Rust/cargo for
 the optional Diesel compile check.
 
@@ -88,6 +100,12 @@ pnpm compile-check   # optional: cargo check the generated Diesel code (skips wi
 pnpm check:sqlalchemy  # optional: import, configure and create the generated SQLAlchemy models
                        # (skips without SQLAlchemy 2)
 ```
+
+## CI and publishing
+
+CI is a thin caller of the shared [pyrlyn/ci](https://github.com/pyrlyn/ci) workflow
+(`.github/workflows/pipeline.yml`, configured in `.github/infra.yml`). Releases publish to npm
+with provenance via `.github/workflows/publish.yml`. Details: [docs/publishing.md](docs/publishing.md).
 
 ## Roadmap
 
