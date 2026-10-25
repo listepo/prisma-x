@@ -2,14 +2,25 @@
   "name": "prisma-x",
   "version": "0.1.0",
   "private": true,
-  "description": "Demo TypeScript AST parsing pipeline for Prisma schemas, built on @prisma/prisma-schema-wasm",
+  "description": "Generate code for other languages and ORMs (Diesel, SQLAlchemy) from Prisma schemas, built on @prisma/prisma-schema-wasm",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "prismax": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./adapters/diesel": {
+      "types": "./dist/adapters/diesel/index.d.ts",
+      "import": "./dist/adapters/diesel/index.js"
+    },
+    "./adapters/sqlalchemy": {
+      "types": "./dist/adapters/sqlalchemy/index.d.ts",
+      "import": "./dist/adapters/sqlalchemy/index.js"
     }
   },
   "files": [
@@ -18,7 +29,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:py": "python3 -m pytest scripts/tests -q",
+    "compile-check": "pnpm build && python3 scripts/compile_check_diesel.py"
   },
   "dependencies": {
     "@prisma/prisma-schema-wasm": "8.1.0-2.59be4fda12412a79eeb9c2ae727b6aa723593323"

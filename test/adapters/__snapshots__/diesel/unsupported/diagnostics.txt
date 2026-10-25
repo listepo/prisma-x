@@ -1,0 +1,6 @@
+warning[UNSUPPORTED_FIELD] Place.location: Unsupported("point") has no Diesel type; column "location" is omitted
+warning[UNSUPPORTED_FIELD] Place.area: Unsupported("polygon") has no Diesel type; column "area_poly" is omitted
+warning[UNSUPPORTED_TYPE] Place.ip: @db.Inet: inet needs Diesel's network-address feature; column "ip" is omitted
+warning[UNSUPPORTED_TYPE] Place.doc: @db.Xml: xml has no Diesel type; column "doc" is omitted
+warning[UNSUPPORTED_TYPE] Place.flags: @db.Bit(8): bit has no Diesel type; column "flags" is omitted
+info[PRIMARY_KEY_FROM_UNIQUE] Contact: No @id; the unique constraint on (email) is used as the Diesel primary key

@@ -1,0 +1,36 @@
+datasource db {
+  provider = "mysql"
+}
+
+model Student {
+  id          Int          @id @default(autoincrement())
+  name        String       @db.VarChar(100)
+  courses     Course[]
+  clubs       Club[]       @relation("ClubMembers")
+  enrollments Enrollment[]
+}
+
+model Course {
+  id          Int          @id @default(autoincrement())
+  title       String
+  students    Student[]
+  enrollments Enrollment[]
+}
+
+model Club {
+  code    String    @id @db.VarChar(16)
+  members Student[] @relation("ClubMembers")
+}
+
+/// Explicit join model with a payload.
+model Enrollment {
+  studentId  Int      @map("student_id")
+  courseId   Int      @map("course_id")
+  grade      Decimal? @db.Decimal(4, 1)
+  enrolledAt DateTime @default(now()) @map("enrolled_at")
+  student    Student  @relation(fields: [studentId], references: [id])
+  course     Course   @relation(fields: [courseId], references: [id])
+
+  @@id([studentId, courseId])
+  @@map("enrollments")
+}

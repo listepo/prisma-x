@@ -1,0 +1,30 @@
+datasource db {
+  provider = "mysql"
+}
+
+enum Status {
+  DRAFT
+  PUBLISHED
+  ARCHIVED  @map("archived")
+}
+
+model Item {
+  id        BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  sku       String    @unique @db.Char(12)
+  title     String
+  body      String?   @db.LongText
+  qty       Int       @db.UnsignedInt
+  small     Int       @db.SmallInt
+  tiny      Int       @db.TinyInt
+  active    Boolean   @default(true)
+  price     Decimal   @db.Decimal(10, 2)
+  weight    Float     @db.Float
+  ratio     Float
+  status    Status    @default(DRAFT)
+  meta      Json?
+  photo     Bytes?    @db.Blob
+  bornOn    DateTime? @db.Date
+  opensAt   DateTime? @db.Time(0)
+  seenAt    DateTime  @default(now()) @db.Timestamp(3)
+  createdAt DateTime  @default(now())
+}

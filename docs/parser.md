@@ -15,6 +15,14 @@ Every public function goes through the same pipeline (`src/parser.ts`):
    - `parseSchema` calls `get_datamodel` (models/enums only) and `get_config` (datasources), then
      maps them to the typed AST in `src/ast.ts`. Relations are derived by pairing relation fields
      on `relationName` plus the model pair. The side that owns the foreign key comes first.
+     Models carry `schema`, `documentation` (`///` comments) and `indexes`: every `@id`/`@@id`,
+     `@unique`/`@@unique`, `@@index` and `@@fulltext`, with its `map:` name when given. Fields
+     carry `dbName` (`@map`) and `documentation`.
+   - `Unsupported("...")` fields are left out of the engine's datamodel. `src/source-scan.ts`
+     recovers them from the source: it strips comments (respecting strings), finds
+     `model`/`view` blocks and reads each field's name, quoted type, `?`/`[]` and `@map`. They
+     appear in the AST as `kind: 'unsupported'` fields at their declaration position. The scan
+     only runs when the source contains `Unsupported`.
    - `getDmmf` calls `get_dmmf` and returns the full document: a typed `datamodel`, with
      `schema` and `mappings` as untyped JSON.
 
@@ -80,9 +88,13 @@ Suites:
   unknown types, duplicate models, a missing datasource (valid), invalid relations, unknown
   providers, the removed `url` property, warnings, Unicode identifiers/strings and span offsets,
   the `getDmmf` Unicode panic, and 500-model inputs.
-- `test/ast.test.ts`: AST mapping (field kinds, defaults, native types, keys, the four relation
-  shapes, same-named relations across model pairs).
-- `test/public-api.test.ts`: the public surface exports no wasm functions or types.
+- `test/ast.test.ts`: AST mapping (field kinds, defaults, native types, keys, indexes, `@map`,
+  documentation, recovered `Unsupported(...)` fields, the four relation shapes, same-named
+  relations across model pairs).
+- `test/reference/`: cases ported from Prisma's own validation suite (see
+  [reference-tests.md](reference-tests.md)).
+- `test/public-api.test.ts`: the public surface (root and adapter entry points) exports no wasm
+  functions or types.
 - `test/lazy-load.test.ts`: the wasm module loads only on first use.
 
 Expectations come from running the engine, not from guessing. When you bump the wasm
@@ -93,8 +105,11 @@ version, run the suite and update the assertions that changed.
 - Node.js only, synchronous, single-threaded. A 500-model `getDmmf` takes about 0.4 s;
   `parseSchema` takes about 0.07 s.
 - Single-file schemas only; `fileName` is always `schema.prisma`.
-- The AST holds what the DMMF holds. There are no comments or attribute positions, and
-  `Unsupported(...)` fields are omitted by the engine. Generators and composite types are not mapped.
+- The AST holds what the datamodel holds. There are no plain `//` comments or attribute
+  positions, and `@@ignore`d models are absent. `Unsupported(...)` fields are recovered by a
+  source scan: they carry name, type, optionality, list-ness and `@map`, but not their other
+  attributes (`@default(dbgenerated(...))`, `@unique`, ...). Generators and composite types
+  are not mapped.
 - `getDmmf` panics (`ENGINE_PANIC`) on model names that start with a non-ASCII character. This
   is a bug in the pinned engine build; `parseSchema` uses `get_datamodel`, which is unaffected.
 - Errors that only `get_config` reports (after validation passed) carry no spans.

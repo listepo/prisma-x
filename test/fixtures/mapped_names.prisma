@@ -1,0 +1,40 @@
+datasource db {
+  provider = "postgresql"
+}
+
+enum OrderState {
+  pending   @map("PENDING")
+  in_flight @map("IN_FLIGHT")
+  done
+
+  @@map("order_state")
+}
+
+model Order {
+  id    Int         @id @default(autoincrement())
+  order String      @map("order_label")
+  type  String
+  table String?     @map("table_no")
+  state OrderState  @default(pending)
+  lines OrderLine[]
+
+  @@map("orders")
+}
+
+model OrderLine {
+  orderId Int    @map("order_id")
+  lineNo  Int    @map("line_no")
+  sku     String
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  @@id([orderId, lineNo])
+  @@unique([orderId, sku], map: "order_line_sku_uq")
+  @@map("order_lines")
+}
+
+model HTTPLog {
+  requestID  String @id @map("request_id")
+  statusCode Int
+
+  @@index([statusCode], map: "http_status_idx")
+}

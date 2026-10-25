@@ -171,6 +171,6 @@ export function getDmmf(source: string): ParseResult<Dmmf> {
 export function parseSchema(source: string): ParseResult<SchemaAst> {
   return run(source, (valid) => {
     const datamodel = readDatamodel(parseJson(unwrap(wasmGetDatamodel(valid), 'get_datamodel', () => []), 'get_datamodel'));
-    return buildAst(datamodel, readDatasources(valid));
+    return buildAst(datamodel, readDatasources(valid), valid);
   });
 }

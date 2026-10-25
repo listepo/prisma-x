@@ -1,0 +1,1 @@
+warning[RELATION_HELPERS_SKIPPED] Session.user: Relation "SessionToTenantUser": composite foreign key; no joinable!/belongs_to generated

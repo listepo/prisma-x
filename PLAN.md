@@ -1,10 +1,19 @@
 # prismax development plan
 
 ## 1. Current state
-- Demo TypeScript wrapper over `@prisma/prisma-schema-wasm` (commit `d0e2605` on `main`, pushed to github.com/listepo/prismax).
-- Typecheck clean, 42/42 tests passing.
-- Public API: `parseSchema`, `validate`, `getDmmf`. Each returns either a result or a typed `SchemaError`. Wasm is internal (`src/internal/wasm.ts`) and never exported.
-- `scripts/copy_prisma_tests.py` fetches Prisma test suites into `tests-reference/` (excluded from build and test runner).
+- Milestones 1-6 of section 4 are implemented on `feat/initial-implementation` (uncommitted, pending review):
+  - core IR and the `Adapter` interface
+  - Diesel adapter (compile-checked against diesel 2.2 for PostgreSQL, MySQL and SQLite)
+  - SQLAlchemy adapter, with no core changes
+  - `prismax generate` CLI
+  - reference tests ported from `psl/psl/tests/validation`
+  - Python script tests
+- `pnpm typecheck`, `pnpm build` and `pnpm test` are green. The Python script tests pass with `python3 -m unittest discover -s scripts/tests`; `pnpm test:py` runs the same tests and needs pytest.
+- Public API: `parseSchema`, `validate`, `getDmmf`, `generate`, `buildIr` and the IR/adapter types. Adapters are exposed as `prisma-x/adapters/{diesel,sqlalchemy}`. Wasm stays internal (`src/internal/wasm.ts`).
+- Docs: `docs/{parser,core-ir,adapters,diesel,sqlalchemy,cli,reference-tests}.md`.
+- Open items:
+  - CI workflows (owner adds them)
+  - run SQLAlchemy `configure_mappers()` on the generated models (not run locally: no SQLAlchemy installed)
 
 ## 2. Goal
 Convert a Prisma schema into ORM code for other ecosystems. The core is target-agnostic; output targets are pluggable adapters (adapter pattern, not "providers").
@@ -30,5 +39,6 @@ schema.prisma -> parser (wasm wrapper) -> AST/DMMF -> core -> neutral model IR -
 
 ## 6. Known limitations
 - `get_dmmf` panics on model names starting with a non-ASCII character (engine bug; surfaced as `ENGINE_PANIC`).
-- `Unsupported(...)` fields are dropped by the engine.
-- TypeScript only for now.
+- `Unsupported(...)` fields are dropped by the engine; they are recovered by a source scan (`src/source-scan.ts`).
+- The engine's datamodel does not expose custom foreign-key names (`@relation(map:)`), so generated code uses Prisma's default names.
+- Diesel allows one `joinable!` per table pair and one `belongs_to` per parent type; extra relations are reported as diagnostics.
