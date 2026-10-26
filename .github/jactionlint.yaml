@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/jdx/jactionlint/main/schema/jactionlint-config.json
+# jactionlint configuration (run by pyrlyn/ci's lint job). The default profile applies.
+ignores:
+  - rule: use-trusted-publishing
+    file: .github/workflows/publish.yml
+    reason: >-
+      npm trusted publishing can only be configured for a package that already exists, so the
+      first release uses the NPM_TOKEN secret. After the first publish, configure the trusted
+      publisher on npmjs.com, drop NODE_AUTH_TOKEN and this ignore (docs/publishing.md).

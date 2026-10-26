@@ -2,7 +2,8 @@
  * A compact, typed AST of a Prisma schema, derived from the DMMF datamodel
  * plus the datasource configuration.
  */
-import type { DmmfDatamodel, DmmfField, DmmfFieldDefault, JsonValue } from './dmmf.js';
+import type { DmmfDatamodel, DmmfField, DmmfFieldDefault, DmmfIndex, DmmfModel, JsonValue } from './dmmf.js';
+import { recoverModels, type RecoveredModel } from './source-recovery.js';
 
 export interface SchemaAst {
   readonly datasources: readonly Datasource[];
@@ -27,14 +28,40 @@ export interface Enum {
   readonly name: string;
   readonly dbName: string | null;
   readonly values: readonly EnumValue[];
+  /** Text of the `///` doc comment, if any. */
+  readonly documentation: string | null;
+}
+
+export type IndexType = 'id' | 'unique' | 'normal' | 'fulltext';
+
+/** A primary key, unique constraint or index, with field-level ones included. */
+export interface Index {
+  readonly type: IndexType;
+  /** Prisma-level name (`name:` argument), used for compound ids/uniques. */
+  readonly name: string | null;
+  /** Database constraint name from `map:`; null when the engine default applies. */
+  readonly dbName: string | null;
+  readonly fields: readonly string[];
+  /** True for `@id`/`@unique` on a field, false for block attributes. */
+  readonly isDefinedOnField: boolean;
 }
 
 export interface Model {
   readonly name: string;
   readonly dbName: string | null;
+  /** Database schema from `@@schema`, for multi-schema datasources. */
+  readonly schema: string | null;
+  readonly documentation: string | null;
   readonly fields: readonly Field[];
   readonly primaryKey: { readonly name: string | null; readonly fields: readonly string[] } | null;
   readonly uniqueIndexes: readonly { readonly name: string | null; readonly fields: readonly string[] }[];
+  /** All ids, uniques and indexes of the model, in engine order. */
+  readonly indexes: readonly Index[];
+  /**
+   * `@@ignore`: left out of Prisma Client, but the table exists. The engine
+   * omits these models; they are recovered from the source.
+   */
+  readonly isIgnored: boolean;
 }
 
 export type FieldDefault =
@@ -43,6 +70,8 @@ export type FieldDefault =
 
 interface BaseField {
   readonly name: string;
+  /** Column name from `@map`; null when it equals `name` or the field is a relation. */
+  readonly dbName: string | null;
   readonly type: string;
   readonly isList: boolean;
   readonly isRequired: boolean;
@@ -52,6 +81,12 @@ interface BaseField {
   readonly isReadOnly: boolean;
   readonly isUpdatedAt: boolean;
   readonly default: FieldDefault | null;
+  readonly documentation: string | null;
+  /**
+   * `@ignore`: left out of Prisma Client, but the column exists. The engine
+   * omits these fields; they are recovered from the source.
+   */
+  readonly isIgnored: boolean;
 }
 
 export interface ScalarField extends BaseField {
@@ -71,8 +106,18 @@ export interface RelationField extends BaseField {
   readonly toFields: readonly string[];
   readonly onDelete: string | null;
   readonly onUpdate: string | null;
+  /**
+   * Foreign-key constraint name from `@relation(map: ...)`; null when Prisma's
+   * default applies. Read from the source: the engine's datamodel lacks it.
+   */
+  readonly foreignKeyDbName: string | null;
 }
 
+/**
+ * A field of type `Unsupported("...")`. The engine leaves these out of the
+ * DMMF, so they are recovered from the schema source; `type` is the quoted
+ * database type, e.g. `"circle"`.
+ */
 export interface UnsupportedField extends BaseField {
   readonly kind: 'unsupported';
 }
@@ -99,7 +144,11 @@ export interface Relation {
     readonly references: readonly string[];
     readonly onDelete: string | null;
     readonly onUpdate: string | null;
+    /** Constraint name from `@relation(map: ...)` on the owning side, or null for Prisma's default. */
+    readonly dbName: string | null;
   } | null;
+  /** A side's field has `@ignore` or a side's model has `@@ignore`: the relation is not in Prisma Client. */
+  readonly isIgnored: boolean;
 }
 
 function toDefault(value: DmmfFieldDefault | undefined): FieldDefault | null {
@@ -110,9 +159,15 @@ function toDefault(value: DmmfFieldDefault | undefined): FieldDefault | null {
   return { kind: 'literal', value: value as JsonValue };
 }
 
-function toField(field: DmmfField): Field {
+interface FieldExtras {
+  readonly isIgnored: boolean;
+  readonly foreignKeyDbName: string | null;
+}
+
+function toField(field: DmmfField, extras: FieldExtras): Field {
   const base: BaseField = {
     name: field.name,
+    dbName: field.dbName ?? null,
     type: field.type,
     isList: field.isList,
     isRequired: field.isRequired,
@@ -121,6 +176,8 @@ function toField(field: DmmfField): Field {
     isReadOnly: field.isReadOnly,
     isUpdatedAt: field.isUpdatedAt,
     default: toDefault(field.default),
+    documentation: field.documentation ?? null,
+    isIgnored: extras.isIgnored,
   };
   switch (field.kind) {
     case 'scalar':
@@ -142,6 +199,7 @@ function toField(field: DmmfField): Field {
         toFields: field.relationToFields ?? [],
         onDelete: field.relationOnDelete ?? null,
         onUpdate: field.relationOnUpdate ?? null,
+        foreignKeyDbName: extras.foreignKeyDbName,
       };
   }
 }
@@ -152,6 +210,7 @@ interface RelationEnd {
 }
 
 function buildRelations(models: readonly Model[]): Relation[] {
+  const ignoredModels = new Set(models.filter((m) => m.isIgnored).map((m) => m.name));
   // Relation names are only unique per model pair, so key on both.
   const groups = new Map<string, RelationEnd[]>();
   for (const model of models) {
@@ -191,21 +250,76 @@ function buildRelations(models: readonly Model[]): Relation[] {
               references: owner.field.toFields,
               onDelete: owner.field.onDelete,
               onUpdate: owner.field.onUpdate,
+              dbName: owner.field.foreignKeyDbName,
             }
           : null,
+      isIgnored: [owner, other].some((end) => end.field.isIgnored || ignoredModels.has(end.model)),
     });
   }
   return relations;
 }
 
-export function buildAst(datamodel: DmmfDatamodel, datasources: readonly Datasource[]): SchemaAst {
-  const models: Model[] = datamodel.models.map((model) => ({
+function toIndex(index: DmmfIndex): Index {
+  return {
+    type: index.type as IndexType,
+    name: index.name ?? null,
+    dbName: index.dbName ?? null,
+    fields: index.fields.map((f) => f.name),
+    isDefinedOnField: index.isDefinedOnField,
+  };
+}
+
+/**
+ * The engine's fields plus the recovered ones it omits (`@ignore`,
+ * `Unsupported(...)`), in declaration order.
+ */
+function fieldsOf(model: DmmfModel, recovered: RecoveredModel | undefined): Field[] {
+  const known = new Set(model.fields.map((f) => f.name));
+  const declared = recovered?.model.fields ?? [];
+  const fields = [...model.fields, ...declared.filter((f) => !known.has(f.name))].map((f) =>
+    toField(f, {
+      isIgnored: recovered?.ignoredFields.has(f.name) ?? false,
+      foreignKeyDbName: recovered?.foreignKeyNames.get(f.name) ?? null,
+    }),
+  );
+  const order = new Map(declared.map((f, i) => [f.name, i]));
+  const position = (f: Field) => order.get(f.name) ?? Number.MAX_SAFE_INTEGER;
+  return fields.sort((a, b) => position(a) - position(b));
+}
+
+/**
+ * Maps the DMMF datamodel to the AST. `source` is the schema text. It is
+ * scanned for what the DMMF leaves out: `Unsupported(...)` and `@ignore`
+ * fields, `@@ignore` models and `@relation(map: ...)` names.
+ */
+export function buildAst(datamodel: DmmfDatamodel, datasources: readonly Datasource[], source = ''): SchemaAst {
+  const recovered = source === '' ? [] : recoverModels(source, datamodel.enums.map((e) => e.name), datamodel.types.map((t) => t.name));
+  const byName = new Map(recovered.map((r) => [r.model.name, r]));
+  const toModel = (model: DmmfModel, indexes: readonly DmmfIndex[], isIgnored: boolean): Model => ({
     name: model.name,
     dbName: model.dbName,
-    fields: model.fields.map(toField),
+    schema: model.schema ?? null,
+    documentation: model.documentation ?? null,
+    fields: fieldsOf(model, byName.get(model.name)),
     primaryKey: model.primaryKey,
     uniqueIndexes: model.uniqueIndexes,
+    indexes: indexes.filter((i) => i.model === model.name).map(toIndex),
+    isIgnored,
+  });
+  const models = datamodel.models.map((m) => toModel(m, datamodel.indexes ?? [], false));
+  const known = new Set(models.map((m) => m.name));
+  for (const r of recovered) {
+    if (r.isIgnored && !known.has(r.model.name)) models.push(toModel(r.model, r.indexes, true));
+  }
+  // Declaration order, with recovered models in place.
+  const order = new Map(recovered.map((r, i) => [r.model.name, i]));
+  const position = (m: Model) => order.get(m.name) ?? Number.MAX_SAFE_INTEGER;
+  models.sort((a, b) => position(a) - position(b));
+  const enums: Enum[] = datamodel.enums.map((e) => ({
+    name: e.name,
+    dbName: e.dbName,
+    values: e.values.map((v) => ({ name: v.name, dbName: v.dbName })),
+    documentation: e.documentation ?? null,
   }));
-  const enums: Enum[] = datamodel.enums.map((e) => ({ name: e.name, dbName: e.dbName, values: e.values }));
   return { datasources, models, enums, relations: buildRelations(models) };
 }

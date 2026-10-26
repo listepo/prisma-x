@@ -1,0 +1,32 @@
+datasource db {
+  provider = "postgresql"
+}
+
+enum Color {
+  RED
+  GREEN
+  BLUE
+}
+
+/// One column per supported PostgreSQL type.
+model Sample {
+  id      BigInt   @id @default(autoincrement())
+  small   Int      @db.SmallInt
+  oid     Int?     @db.Oid
+  real    Float    @db.Real
+  double  Float
+  price   Decimal  @db.Money
+  amount  Decimal
+  code    String   @db.Char(3)
+  nick    String?  @db.Citext
+  day     DateTime @db.Date
+  at      DateTime @db.Time(3)
+  stamp   DateTime @db.Timestamp(3)
+  stampTz DateTime @db.Timestamptz(3)
+  doc     Json     @db.Json
+  docb    Json
+  raw     Bytes
+  uid     String   @db.Uuid
+  colors  Color[]
+  scores  Int[]
+}

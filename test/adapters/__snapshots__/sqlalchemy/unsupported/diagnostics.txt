@@ -1,0 +1,4 @@
+warning[NATIVE_TYPE_FALLBACK] Place.doc: native type @db.Xml is not mapped for SQLAlchemy; using sa.Text()
+warning[UNSUPPORTED_FIELD] Place.location: Unsupported("point") has no SQLAlchemy type; column "location" is omitted
+warning[UNSUPPORTED_FIELD] Place.area: Unsupported("polygon") has no SQLAlchemy type; column "area_poly" is omitted
+info[PRIMARY_KEY_FROM_UNIQUE] Contact: No @id; the unique constraint on (email) is used as the mapper primary key

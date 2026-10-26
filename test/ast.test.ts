@@ -3,6 +3,7 @@ import { parseSchema, type Field, type Relation } from '../src/index.js';
 import { datasource, expectOk } from './helpers.js';
 
 const schema = `${datasource}
+/// Who may do what.
 enum Role {
   USER
   ADMIN @map("admin")
@@ -82,6 +83,7 @@ describe('parseSchema AST', () => {
           { name: 'USER', dbName: null },
           { name: 'ADMIN', dbName: 'admin' },
         ],
+        documentation: 'Who may do what.',
       },
     ]);
   });
@@ -107,11 +109,69 @@ describe('parseSchema AST', () => {
       ['mentorId', 'scalar'],
       ['mentor', 'relation'],
       ['mentees', 'relation'],
+      ['legacy', 'unsupported'],
     ]);
   });
 
-  it('omits Unsupported(...) fields, because the engine leaves them out of the DMMF', () => {
-    expect(field('User', 'legacy')).toBeUndefined();
+  it('recovers Unsupported(...) fields from the source, because the engine leaves them out of the DMMF', () => {
+    expect(field('User', 'legacy')).toEqual({
+      kind: 'unsupported',
+      name: 'legacy',
+      dbName: null,
+      type: 'circle',
+      isList: false,
+      isRequired: false,
+      isUnique: false,
+      isId: false,
+      isReadOnly: false,
+      isUpdatedAt: false,
+      default: null,
+      documentation: null,
+      isIgnored: false,
+    });
+  });
+
+  it('keeps Unsupported(...) fields in declaration order, with @map, despite comments and strings', () => {
+    const source = `${datasource}
+model Shape {
+  id    Int                     @id
+  // area Unsupported("ignored")
+  area  Unsupported("polygon")  @map("area_poly")
+  label String                  @default("model X { y Unsupported(\\"z\\") }")
+  pts   Unsupported("point")[]
+}
+`;
+    const shape = expectOk(parseSchema(source)).models[0]!;
+    expect(shape.fields.map((f) => [f.name, f.kind, f.type, f.dbName, f.isList])).toEqual([
+      ['id', 'scalar', 'Int', null, false],
+      ['area', 'unsupported', 'polygon', 'area_poly', false],
+      ['label', 'scalar', 'String', null, false],
+      ['pts', 'unsupported', 'point', null, true],
+    ]);
+  });
+
+  it('maps @map column names, documentation, schemas and all indexes', () => {
+    const source = `${datasource}
+/// A thing.
+model Thing {
+  id    Int    @id(map: "thing_pk")
+  /// The code.
+  code  String @unique @map("thing_code")
+  group String
+
+  @@unique([group, code], name: "groupCode")
+  @@index([group], map: "thing_group_idx")
+}
+`;
+    const thing = expectOk(parseSchema(source)).models[0]!;
+    expect(thing).toMatchObject({ documentation: 'A thing.', schema: null });
+    expect(thing.fields.find((f) => f.name === 'code')).toMatchObject({ dbName: 'thing_code', documentation: 'The code.' });
+    expect(thing.indexes).toEqual([
+      { type: 'id', name: null, dbName: 'thing_pk', fields: ['id'], isDefinedOnField: true },
+      { type: 'unique', name: null, dbName: null, fields: ['code'], isDefinedOnField: true },
+      { type: 'normal', name: null, dbName: 'thing_group_idx', fields: ['group'], isDefinedOnField: false },
+      { type: 'unique', name: 'groupCode', dbName: null, fields: ['group', 'code'], isDefinedOnField: false },
+    ]);
   });
 
   it('maps defaults, native types and flags', () => {
@@ -158,7 +218,8 @@ describe('parseSchema AST', () => {
         { model: 'Post', field: 'author', isList: false, isRequired: true },
         { model: 'User', field: 'posts', isList: true, isRequired: true },
       ],
-      foreignKey: { fields: ['authorId'], references: ['id'], onDelete: null, onUpdate: 'Restrict' },
+      foreignKey: { fields: ['authorId'], references: ['id'], onDelete: null, onUpdate: 'Restrict', dbName: null },
+      isIgnored: false,
     });
   });
 

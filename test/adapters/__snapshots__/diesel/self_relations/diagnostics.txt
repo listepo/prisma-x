@@ -1,0 +1,5 @@
+info[JOINABLE_SKIPPED] Employee: Self-relation "Management": no joinable!; use diesel::alias! to join
+info[JOINABLE_SKIPPED] Employee: Self-relation "Mentorship": no joinable!; use diesel::alias! to join
+warning[BELONGS_TO_SKIPPED] Employee: Relation "Mentorship": Employee already has belongs_to(Employee); Diesel allows only one per parent type
+warning[JOINABLE_SKIPPED] Employee: Relation "Follows": follows and employee already have a joinable!; Diesel allows only one per table pair
+warning[BELONGS_TO_SKIPPED] Employee: Relation "Follows": Follows already has belongs_to(Employee); Diesel allows only one per parent type

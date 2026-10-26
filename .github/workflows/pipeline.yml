@@ -1,0 +1,33 @@
+# Thin caller of pyrlyn/ci's config-driven ci.yml. What runs is configured in .github/infra.yml.
+# pyrlyn convention: the reference is always @main (pyrlyn/ci's no-pinned-ci check rejects
+# SHA or tag pins). Shared workflows: https://github.com/pyrlyn/ci/blob/main/docs/config.md
+name: pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: pipeline-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    uses: pyrlyn/ci/.github/workflows/ci.yml@main
+    # The union every nested job asks for, validated up front even for disabled checks.
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: read
+      actions: write
+      issues: write
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

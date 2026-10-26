@@ -3,6 +3,8 @@
  * the underlying wasm module and its types are deliberately kept internal.
  */
 export { parseSchema, validate, getDmmf } from './parser.js';
+export { generate } from './generate.js';
+export * from './core/index.js';
 export type { ParseResult, ParseSuccess, ParseFailure } from './parser.js';
 export { SchemaError } from './errors.js';
 export type { SchemaErrorCode, Diagnostic, SourceSpan, Position, Severity } from './errors.js';
@@ -16,6 +18,8 @@ export type {
   RelationField,
   UnsupportedField,
   FieldDefault,
+  Index,
+  IndexType,
   Enum,
   EnumValue,
   Relation,

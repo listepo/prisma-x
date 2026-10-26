@@ -1,0 +1,4 @@
+warning[TYPE_APPROXIMATED] Project.budget: Decimal is mapped to Double/f64 on SQLite and may lose precision
+info[TYPE_APPROXIMATED] Project.meta: Json is stored as text on SQLite; mapped to Text/String
+info[JOINABLE_SKIPPED] Task: Self-relation "Subtasks": no joinable!; use diesel::alias! to join
+info[SQLITE_DATETIME]: Prisma stores DateTime on SQLite as Unix milliseconds by default; Diesel reads Timestamp as text, so values written by Prisma may not parse

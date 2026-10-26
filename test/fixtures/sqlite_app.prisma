@@ -1,0 +1,32 @@
+datasource db {
+  provider = "sqlite"
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Project {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  budget    Decimal?
+  meta      Json?
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  tasks     Task[]
+}
+
+model Task {
+  id        Int      @id @default(autoincrement())
+  title     String
+  priority  Priority @default(MEDIUM)
+  done      Boolean  @default(false)
+  payload   Bytes?
+  projectId Int
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentId  Int?
+  parent    Task?    @relation("Subtasks", fields: [parentId], references: [id])
+  subtasks  Task[]   @relation("Subtasks")
+}

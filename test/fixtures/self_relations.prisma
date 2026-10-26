@@ -1,0 +1,17 @@
+datasource db {
+  provider = "postgresql"
+}
+
+/// One model with all three self-relation shapes.
+model Employee {
+  id        Int        @id @default(autoincrement())
+  name      String
+  managerId Int?       @map("manager_id")
+  manager   Employee?  @relation("Management", fields: [managerId], references: [id])
+  reports   Employee[] @relation("Management")
+  mentorId  Int?       @unique @map("mentor_id")
+  mentor    Employee?  @relation("Mentorship", fields: [mentorId], references: [id])
+  mentee    Employee?  @relation("Mentorship")
+  following Employee[] @relation("Follows")
+  followers Employee[] @relation("Follows")
+}

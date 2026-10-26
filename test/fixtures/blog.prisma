@@ -1,0 +1,61 @@
+datasource db {
+  provider = "postgresql"
+}
+
+/// Access level of a user.
+enum Role {
+  USER
+  ADMIN @map("admin")
+
+  @@map("role")
+}
+
+/// A registered user.
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique @db.VarChar(255)
+  name      String?
+  role      Role     @default(USER)
+  /// Free-form settings.
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  posts     Post[]
+  profile   Profile?
+
+  @@map("users")
+}
+
+model Profile {
+  id     Int     @id @default(autoincrement())
+  bio    String?
+  userId Int     @unique @map("user_id")
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model Post {
+  id          String    @id @default(uuid()) @db.Uuid
+  title       String    @db.VarChar(200)
+  body        String
+  published   Boolean   @default(false)
+  rating      Decimal?  @db.Decimal(3, 2)
+  views       BigInt    @default(0)
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(6)
+  authorId    Int       @map("author_id")
+  author      User      @relation(fields: [authorId], references: [id])
+  tags        Tag[]
+  labels      String[]
+
+  @@index([authorId, publishedAt])
+  @@map("posts")
+}
+
+model Tag {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  posts Post[]
+
+  @@map("tags")
+}

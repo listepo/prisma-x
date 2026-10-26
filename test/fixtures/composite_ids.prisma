@@ -1,0 +1,31 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  id    Int          @id
+  name  String
+  users TenantUser[]
+}
+
+/// Users are scoped by tenant: the key is (tenantId, userId).
+model TenantUser {
+  tenantId Int       @map("tenant_id")
+  userId   Int       @map("user_id")
+  email    String
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  sessions Session[]
+
+  @@id([tenantId, userId], name: "tenantUserId", map: "tenant_users_pk")
+  @@unique([tenantId, email])
+  @@map("tenant_users")
+}
+
+model Session {
+  id       Int        @id @default(autoincrement())
+  tenantId Int        @map("tenant_id")
+  userId   Int        @map("user_id")
+  user     TenantUser @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+}

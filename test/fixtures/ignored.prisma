@@ -1,0 +1,45 @@
+// Not in Prisma Client, but in the database: @@ignore models, @ignore fields
+// and relations, plus custom foreign-key names (@relation(map: ...)).
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id       Int        @id @default(autoincrement())
+  email    String     @unique
+  /// Kept in the database, hidden from Prisma Client.
+  legacy   String?    @map("legacy_code") @ignore
+  posts    Post[]
+  pinnedId Int?       @unique @map("pinned_id")
+  pinned   Post?      @relation("Pinned", fields: [pinnedId], references: [id], map: "user_pinned_post_fk") @ignore
+  logs     AuditLog[] @ignore
+  tags     Tag[]      @ignore
+}
+
+model Post {
+  id       Int    @id @default(autoincrement())
+  title    String
+  authorId Int    @map("author_id")
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade, map: "post_author_fk")
+  pinnedBy User?  @relation("Pinned")
+}
+
+/// Raw audit rows without a key.
+model AuditLog {
+  userId Int      @map("user_id")
+  action String
+  at     DateTime @default(now())
+  user   User     @relation(fields: [userId], references: [id], map: "audit_log_user_fk")
+
+  @@index([userId])
+  @@map("audit_log")
+  @@ignore
+}
+
+model Tag {
+  id    Int    @id
+  name  String @unique
+  users User[]
+
+  @@ignore
+}
